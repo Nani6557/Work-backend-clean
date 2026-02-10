@@ -1,49 +1,51 @@
 import admin from "firebase-admin";
-import fs from "fs";
 
 let initialized = false;
 let firestore = null;
 let bucket = null;
 
 export function initFirebase() {
-  // If already initialized, STOP here
   if (initialized) return;
 
-  const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  const {
+    FIREBASE_PROJECT_ID,
+    FIREBASE_CLIENT_EMAIL,
+    FIREBASE_PRIVATE_KEY,
+    FIREBASE_STORAGE_BUCKET,
+  } = process.env;
 
-  // If .env has not loaded yet, STOP silently
-if (!credPath || !fs.existsSync(credPath)) {
-  console.warn("⚠️ Firebase credentials not found, skipping Admin init");
-  return;
-}
+  // If any required env var is missing, STOP
+  if (
+    !FIREBASE_PROJECT_ID ||
+    !FIREBASE_CLIENT_EMAIL ||
+    !FIREBASE_PRIVATE_KEY
+  ) {
+    console.warn("⚠️ Firebase env vars missing, skipping Admin init");
+    return;
+  }
 
-  // If file does not exist, STOP silently
- if (!fs.existsSync(credPath)) {
-  console.log("❌ FIREBASE ERROR: serviceAccountKey.json NOT FOUND at:", credPath);
-  return;
-}
-
-  // REAL initialization
   try {
-    const serviceAccount = JSON.parse(fs.readFileSync(credPath, "utf8"));
-
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+      credential: admin.credential.cert({
+        projectId: FIREBASE_PROJECT_ID,
+        clientEmail: FIREBASE_CLIENT_EMAIL,
+        privateKey: FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+      }),
+      storageBucket: FIREBASE_STORAGE_BUCKET,
     });
 
     firestore = admin.firestore();
     bucket = admin.storage().bucket();
 
     initialized = true;
-    console.log("🔥 Firebase Admin initialized");
+    console.log("🔥 Firebase Admin initialized (env-based)");
 
   } catch (err) {
     console.error("❌ Firebase initialization failed:", err.message);
   }
 }
 
-// Lazy loading — init only when needed
+// Lazy init
 export function getFirestore() {
   initFirebase();
   return firestore;
@@ -53,4 +55,5 @@ export function getBucket() {
   initFirebase();
   return bucket;
 }
+
 export { admin };
