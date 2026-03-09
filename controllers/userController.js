@@ -11,7 +11,7 @@ export async function listWorkers(req, res) {
   try {
     const snap = await firestore
       .collection("workers")
-      .where("type", "==", "worker")   // ✅ only workers
+         // ✅ only workers
       .limit(500)
       .get();
 
@@ -24,7 +24,7 @@ export async function listWorkers(req, res) {
         workName: d.workName || "",
         area: d.area || "",
         profilePic: d.profilePic || "",
-        type: d.type || "worker",
+        type: d.type || "",
       };
     });
 
