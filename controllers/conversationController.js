@@ -12,8 +12,7 @@ export async function createConversation(req, res) {
     if (!db) return res.status(500).json({ error: 'firestore not available' });
 
     // ensure deterministic participant ordering to reuse existing conversation
-    const participants = [a, b].sort();
-
+const users = [a, b].sort();
     // Search for existing conversation with same participants
     const q = await db.collection('conversations')
       .where('participants', '==', participants)
@@ -99,7 +98,7 @@ export async function getUserConversations(req, res) {
 
     const snap = await db
       .collection("conversations")
-      .where("participants", "array-contains", userId)
+      .where("users", "array-contains", userId)
       .get();
 
     const out = snap.docs.map((doc) => ({
