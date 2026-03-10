@@ -12,10 +12,16 @@ export async function createConversation(req, res) {
     if (!db) return res.status(500).json({ error: 'firestore not available' });
 
     // ensure deterministic participant ordering to reuse existing conversation
-const users = [a, b].sort();
-    // Search for existing conversation with same participants
+if (a === b) {
+  return res.status(400).json({ error: "Cannot create conversation with same user" });
+}
+
+const users = [a, b].sort(); 
+
+
+// Search for existing conversation with same participants
     const q = await db.collection('conversations')
-      .where('participants', '==', participants)
+      .where('users', '==', users)
       .limit(1)
       .get();
 
@@ -27,7 +33,7 @@ const users = [a, b].sort();
     // create new conversation
     const now = Date.now();
     const newDocRef = await db.collection('conversations').add({
-      participants,
+      users,
       createdAt: now,
       updatedAt: now,
       lastMessage: null
@@ -89,24 +95,25 @@ export async function postMessage(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
+
 export async function getUserConversations(req, res) {
   try {
     const { userId } = req.params;
 
     const db = getFirestore();
-    if (!db) return res.status(500).json({ error: "firestore not available" });
 
     const snap = await db
       .collection("conversations")
       .where("users", "array-contains", userId)
       .get();
 
-    const out = snap.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    const out = snap.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(c => c.users && c.users.includes(userId));
 
     res.json(out);
+
   } catch (err) {
     console.error("getUserConversations error:", err);
     res.status(500).json({ error: err.message });
