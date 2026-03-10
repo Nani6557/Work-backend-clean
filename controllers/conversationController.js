@@ -90,3 +90,28 @@ export async function postMessage(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
+
+export async function getUserConversations(req, res) {
+  try {
+    const { userId } = req.params;
+
+    const db = getFirestore();
+    if (!db) return res.status(500).json({ error: 'firestore not available' });
+
+    const q = await db.collection('conversations')
+      .where('participants', 'array-contains', userId)
+      .orderBy('updatedAt', 'desc')
+      .get();
+
+    const out = q.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+
+    return res.json(out);
+  } catch (err) {
+    console.error('getUserConversations err', err);
+    return res.status(500).json({ error: err.message });
+  }
+}
