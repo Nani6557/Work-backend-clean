@@ -16,12 +16,12 @@ if (a === b) {
   return res.status(400).json({ error: "Cannot create conversation with same user" });
 }
 
-const users = [a, b].sort(); 
+const participants = [a, b].sort(); 
 
 
 // Search for existing conversation with same participants
     const q = await db.collection('conversations')
-      .where('users', '==', users)
+      .where('participants', 'array-contains', a)
       .limit(1)
       .get();
 
@@ -33,7 +33,7 @@ const users = [a, b].sort();
     // create new conversation
     const now = Date.now();
     const newDocRef = await db.collection('conversations').add({
-      users,
+      participants,
       createdAt: now,
       updatedAt: now,
       lastMessage: null
@@ -97,20 +97,39 @@ export async function postMessage(req, res) {
 }
 
 
+
+
 export async function getUserConversations(req, res) {
   try {
+ 
+ 
+ 
     const { userId } = req.params;
-
+  
+  
     const db = getFirestore();
 
     const snap = await db
       .collection("conversations")
-      .where("users", "array-contains", userId)
+      .where("participants", "array-contains", userId)
       .get();
 
-    const out = snap.docs
-      .map(doc => ({ id: doc.id, ...doc.data() }))
-      .filter(c => c.users && c.users.includes(userId));
+    const out = [];
+
+    snap.docs.forEach(doc => {
+      const data = doc.data();
+
+      // ignore broken conversations
+          if (!data.participants || data.participants.length !== 2) return;
+
+      // ensure the user is actually a participant
+if (!data.participants.includes(userId)) return;
+
+      out.push({
+        id: doc.id,
+        ...data
+      });
+    });
 
     res.json(out);
 
@@ -119,3 +138,4 @@ export async function getUserConversations(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+
