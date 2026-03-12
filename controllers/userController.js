@@ -22,6 +22,7 @@ export async function listWorkers(req, res) {
         name: d.name || "",
         workName: d.workName || "",
         area: d.area || "",
+        mobile: d.phone || "",
         profilePic: d.profilePic || "",
         type: d.type || "",
       };
