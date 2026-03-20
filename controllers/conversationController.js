@@ -21,14 +21,13 @@ const participants = [a, b].sort();
 
 // Search for existing conversation with same participants
     const q = await db.collection('conversations')
-      .where('participants', 'array-contains', a)
-      .limit(1)
-      .get();
+  .where('participants', '==', participants)
+  .get();
 
-    if (!q.empty) {
-      const doc = q.docs[0];
-      return res.json({ conversationId: doc.id, exists: true });
-    }
+if (!q.empty) {
+  const doc = q.docs[0];
+  return res.json({ conversationId: doc.id, exists: true });
+}
 
     // create new conversation
     const now = Date.now();
