@@ -555,3 +555,61 @@ export const subscriptionWebhook = async (req, res) => {
       .send("Webhook processing failed");
   }
 };
+
+
+export const subscriptionStatus = async (req, res) => {
+  try {
+    const { uid } = req.query;
+
+    if (!uid) {
+      return res.json({
+        status: "none",
+      });
+    }
+
+    // First check the user's final subscription state
+    const userSnap = await admin
+      .firestore()
+      .collection("users")
+      .doc(uid)
+      .get();
+
+    if (userSnap.exists) {
+      const subscription =
+        userSnap.data()?.subscription;
+
+      if (subscription?.active === true) {
+        return res.json({
+          status: "active",
+        });
+      }
+    }
+
+    // If not active, check the subscription record
+    const subscriptionSnap = await admin
+      .firestore()
+      .collection("subscriptions")
+      .doc(uid)
+      .get();
+
+    if (!subscriptionSnap.exists) {
+      return res.json({
+        status: "none",
+      });
+    }
+
+    return res.json({
+      status: subscriptionSnap.data().status || "none",
+    });
+
+  } catch (error) {
+    console.error(
+      "Subscription status error:",
+      error
+    );
+
+    return res.json({
+      status: "error",
+    });
+  }
+};
