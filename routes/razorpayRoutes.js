@@ -1,18 +1,32 @@
 import express from "express";
+
 import {
   createSubscription,
-  subscriptionWebhook,
   verifySubscriptionPayment,
+  subscriptionWebhook,
   subscriptionStatus,
 } from "../controllers/razorpayController.js";
 
 const router = express.Router();
 
-// frontend calls this
-router.post("/subscription/create", createSubscription);
+router.post(
+  "/subscription/create",
+  createSubscription
+);
 
-// Razorpay calls this
-router.post("/razorpay/webhook", subscriptionWebhook);
-router.get("/subscription/status", subscriptionStatus);
+router.post(
+  "/subscription/verify",
+  verifySubscriptionPayment
+);
+
+router.post(
+  "/razorpay/webhook",
+  subscriptionWebhook
+);
+
+router.get(
+  "/subscription/status",
+  subscriptionStatus
+);
 
 export default router;
