@@ -34,9 +34,9 @@ if (!plan_id) {
   });
 }
 const cycleMap = {
-  monthly: 1200,
-  halfyearly: 200,
-  yearly: 100,
+  monthly: 12,
+  halfyearly: 2,
+  yearly: 1,
 };
 
 const total_count = cycleMap[planType];
@@ -257,24 +257,42 @@ export const subscriptionWebhook = async (req, res) => {
     // ACTIVATED
     // --------------------------------
 
-    if (event === "subscription.activated") {
-      await admin
-        .firestore()
-        .collection("users")
-        .doc(uid)
-        .set(
-          {
-            subscription: {
-              active: true,
-              planType,
-              subscriptionId,
-              activatedAt:
-                admin.firestore.FieldValue
-                  .serverTimestamp(),
-            },
-          },
-          { merge: true }
-        );
+   if (event === "subscription.activated") {
+
+  const currentEnd = subscription.current_end || null;
+
+  await admin
+    .firestore()
+    .collection("users")
+    .doc(uid)
+    .set(
+      {
+        subscription: {
+          active: true,
+          planType,
+          subscriptionId,
+          currentEnd,
+          activatedAt:
+            admin.firestore.FieldValue.serverTimestamp(),
+        },
+      },
+      { merge: true }
+    );
+
+  await doc.ref.update({
+    status: "active",
+    currentEnd,
+    updatedAt:
+      admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  console.log(
+    "Subscription activated:",
+    subscriptionId,
+    "currentEnd:",
+    currentEnd
+  );
+}
 
       await doc.ref.update({
         status: "active",
@@ -293,37 +311,42 @@ export const subscriptionWebhook = async (req, res) => {
     // SUCCESSFUL RENEWAL
     // --------------------------------
 
-    else if (event === "subscription.charged") {
-      await admin
-        .firestore()
-        .collection("users")
-        .doc(uid)
-        .set(
-          {
-            subscription: {
-              active: true,
-              planType,
-              subscriptionId,
-              lastChargedAt:
-                admin.firestore.FieldValue
-                  .serverTimestamp(),
-            },
-          },
-          { merge: true }
-        );
+  else if (event === "subscription.charged") {
 
-      await doc.ref.update({
-        status: "active",
-        updatedAt:
-          admin.firestore.FieldValue
-            .serverTimestamp(),
-      });
+  const currentEnd = subscription.current_end || null;
 
-      console.log(
-        "Subscription charged:",
-        subscriptionId
-      );
-    }
+  await admin
+    .firestore()
+    .collection("users")
+    .doc(uid)
+    .set(
+      {
+        subscription: {
+          active: true,
+          planType,
+          subscriptionId,
+          currentEnd,
+          lastChargedAt:
+            admin.firestore.FieldValue.serverTimestamp(),
+        },
+      },
+      { merge: true }
+    );
+
+  await doc.ref.update({
+    status: "active",
+    currentEnd,
+    updatedAt:
+      admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  console.log(
+    "Subscription charged:",
+    subscriptionId,
+    "new currentEnd:",
+    currentEnd
+  );
+}
 
     // --------------------------------
     // PAYMENT RETRY / PENDING
@@ -578,11 +601,25 @@ export const subscriptionStatus = async (req, res) => {
       const subscription =
         userSnap.data()?.subscription;
 
-      if (subscription?.active === true) {
-        return res.json({
-          status: "active",
-        });
-      }
+     if (subscription?.active === true) {
+
+  const currentEnd = subscription.currentEnd;
+
+  // If Razorpay gave us an expiry timestamp,
+  // make sure the subscription has not expired.
+  if (
+    currentEnd &&
+    Date.now() >= currentEnd * 1000
+  ) {
+    return res.json({
+      status: "expired",
+    });
+  }
+
+  return res.json({
+    status: "active",
+  });
+}
     }
 
     // If not active, check the subscription record
