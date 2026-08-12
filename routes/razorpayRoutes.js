@@ -5,7 +5,6 @@ import {
   verifySubscriptionPayment,
   subscriptionStatus,
 } from "../controllers/razorpayController.js";
-import { subscriptionStatus } from "../controllers/razorpayController.js";
 
 const router = express.Router();
 
