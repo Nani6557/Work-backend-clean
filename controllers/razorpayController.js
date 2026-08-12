@@ -112,6 +112,98 @@ const subscription = await razorpay.subscriptions.create({
 };
 
 
+export const verifySubscriptionPayment = async (req, res) => {
+  try {
+    const {
+      uid,
+      razorpay_payment_id,
+      razorpay_subscription_id,
+      razorpay_signature,
+    } = req.body;
+
+    if (
+      !uid ||
+      !razorpay_payment_id ||
+      !razorpay_subscription_id ||
+      !razorpay_signature
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing payment verification details",
+      });
+    }
+
+    const generatedSignature = crypto
+      .createHmac(
+        "sha256",
+        process.env.RAZORPAY_KEY_SECRET
+      )
+      .update(
+        `${razorpay_payment_id}|${razorpay_subscription_id}`
+      )
+      .digest("hex");
+
+    if (generatedSignature !== razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid payment signature",
+      });
+    }
+
+    const subscriptionSnap = await admin
+      .firestore()
+      .collection("subscriptions")
+      .doc(uid)
+      .get();
+
+    if (!subscriptionSnap.exists) {
+      return res.status(404).json({
+        success: false,
+        error: "Subscription record not found",
+      });
+    }
+
+    const subscriptionData =
+      subscriptionSnap.data();
+
+    if (
+      subscriptionData.subscriptionId !==
+      razorpay_subscription_id
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: "Subscription ID mismatch",
+      });
+    }
+
+    await admin
+      .firestore()
+      .collection("subscriptions")
+      .doc(uid)
+      .update({
+        status: "verified",
+        paymentId: razorpay_payment_id,
+        updatedAt:
+          admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+    return res.json({
+      success: true,
+    });
+
+  } catch (error) {
+    console.error(
+      "Verify subscription payment error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      error: "Payment verification failed",
+    });
+  }
+};
+
 
 
 export const subscriptionWebhook = async (req, res) => {
