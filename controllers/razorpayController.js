@@ -7,42 +7,7 @@ const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
-/*
-export async function createOrder(req, res) {
-  try {
-    const { amount } = req.body;
 
-    const order = await razorpay.orders.create({
-      amount: amount * 100,
-      currency: "INR",
-    });
-
-    res.json(order);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-}
-
-export function verifyWebhook(req, res) {
-  try {
-    const signature = req.headers["x-razorpay-signature"];
-    const secret = process.env.WEBHOOK_SECRET;
-
-    const hash = crypto
-      .createHmac("sha256", secret)
-      .update(JSON.stringify(req.body))
-      .digest("hex");
-
-    if (hash === signature) {
-      res.json({ status: "verified" });
-    } else {
-      res.status(400).json({ status: "invalid signature" });
-    }
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-}
-*/
 export const createSubscription = async (req, res) => {
   try {
     console.log("REQ BODY:", req.body);
@@ -78,6 +43,7 @@ const total_count = cycleMap[planType];
 
 const subscription = await razorpay.subscriptions.create({
   plan_id,
+  quantity: 1,
   customer_notify: 1,
   total_count,
 });
@@ -207,98 +173,385 @@ export const verifySubscriptionPayment = async (req, res) => {
 
 
 export const subscriptionWebhook = async (req, res) => {
-  const signature = req.headers["x-razorpay-signature"];
+  try {
+    const signature =
+      req.headers["x-razorpay-signature"];
 
-  const expected = crypto
-    .createHmac("sha256", process.env.WEBHOOK_SECRET)
-    .update(req.body)
-    .digest("hex");
+    if (!signature) {
+      return res
+        .status(400)
+        .send("Missing Razorpay signature");
+    }
 
-  if (expected !== signature) {
-    return res.status(400).send("Invalid signature");
-  }
+    // IMPORTANT:
+    // req.body must be the RAW webhook body.
+    const expected = crypto
+      .createHmac(
+        "sha256",
+        process.env.WEBHOOK_SECRET
+      )
+      .update(req.body)
+      .digest("hex");
 
-  const payload = JSON.parse(req.body.toString());
-  const event = payload.event;
+    if (expected !== signature) {
+      console.error(
+        "Invalid Razorpay webhook signature"
+      );
 
-  if (event === "subscription.activated") {
-    const subscriptionId = payload.payload.subscription.entity.id;
+      return res
+        .status(400)
+        .send("Invalid signature");
+    }
 
-    const snap = await admin.firestore()
+    const payload = JSON.parse(
+      req.body.toString()
+    );
+
+    const event = payload.event;
+
+    console.log(
+      "Razorpay webhook received:",
+      event
+    );
+
+    const subscription =
+      payload.payload?.subscription?.entity;
+
+    if (!subscription?.id) {
+      console.log(
+        "No subscription entity in webhook"
+      );
+
+      return res.send("OK");
+    }
+
+    const subscriptionId = subscription.id;
+
+    const snap = await admin
+      .firestore()
       .collection("subscriptions")
-      .where("subscriptionId", "==", subscriptionId)
+      .where(
+        "subscriptionId",
+        "==",
+        subscriptionId
+      )
       .limit(1)
       .get();
 
-    if (snap.empty) return res.send("OK");
+    if (snap.empty) {
+      console.log(
+        "Subscription not found:",
+        subscriptionId
+      );
 
-    const doc = snap.docs[0];
-    if (doc.data().status === "active") return res.send("OK");
-
-    const { uid, planType } = doc.data();
-
-    await admin.firestore().collection("users").doc(uid).set(
-      {
-        subscription: {
-          active: true,
-          planType,
-          subscriptionId,
-          activatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-      },
-      { merge: true }
-    );
-
-    await doc.ref.update({
-      status: "active",
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-  }
-
-  if (event === "payment.failed") {
-    // mark failed
-  }
-
-  res.send("OK");
-};
-export const subscriptionStatus = async (req, res) => {
-  try {
-    const { uid } = req.query;
-
-    if (!uid) {
-      return res.json({ status: "none" });
+      return res.send("OK");
     }
 
-    // 1️⃣ First check USER document (FINAL truth)
-const userSnap = await admin
-  .firestore()
-  .collection("users")
-  .doc(uid)
-  .get();
+    const doc = snap.docs[0];
+    const data = doc.data();
 
-if (userSnap.exists) {
-  const sub = userSnap.data()?.subscription;
+    const uid = data.uid;
+    const planType = data.planType;
 
-  if (sub?.active === true) {
-    return res.json({ status: "active" });
-  }
-}
+    // --------------------------------
+    // ACTIVATED
+    // --------------------------------
 
-// 2️⃣ Fallback to subscription document (pending state)
-const subSnap = await admin
-  .firestore()
-  .collection("subscriptions")
-  .doc(uid)
-  .get();
+    if (event === "subscription.activated") {
+      await admin
+        .firestore()
+        .collection("users")
+        .doc(uid)
+        .set(
+          {
+            subscription: {
+              active: true,
+              planType,
+              subscriptionId,
+              activatedAt:
+                admin.firestore.FieldValue
+                  .serverTimestamp(),
+            },
+          },
+          { merge: true }
+        );
 
-if (!subSnap.exists) {
-  return res.json({ status: "none" });
-}
+      await doc.ref.update({
+        status: "active",
+        updatedAt:
+          admin.firestore.FieldValue
+            .serverTimestamp(),
+      });
 
-return res.json({ status: subSnap.data().status });
+      console.log(
+        "Subscription activated:",
+        subscriptionId
+      );
+    }
 
-  } catch (err) {
-    console.error("Status API error:", err);
-    return res.json({ status: "error" });
+    // --------------------------------
+    // SUCCESSFUL RENEWAL
+    // --------------------------------
+
+    else if (event === "subscription.charged") {
+      await admin
+        .firestore()
+        .collection("users")
+        .doc(uid)
+        .set(
+          {
+            subscription: {
+              active: true,
+              planType,
+              subscriptionId,
+              lastChargedAt:
+                admin.firestore.FieldValue
+                  .serverTimestamp(),
+            },
+          },
+          { merge: true }
+        );
+
+      await doc.ref.update({
+        status: "active",
+        updatedAt:
+          admin.firestore.FieldValue
+            .serverTimestamp(),
+      });
+
+      console.log(
+        "Subscription charged:",
+        subscriptionId
+      );
+    }
+
+    // --------------------------------
+    // PAYMENT RETRY / PENDING
+    // --------------------------------
+
+    else if (
+      event === "subscription.pending"
+    ) {
+      await doc.ref.update({
+        status: "pending",
+        updatedAt:
+          admin.firestore.FieldValue
+            .serverTimestamp(),
+      });
+
+      console.log(
+        "Subscription pending:",
+        subscriptionId
+      );
+    }
+
+    // --------------------------------
+    // HALTED
+    // --------------------------------
+
+    else if (
+      event === "subscription.halted"
+    ) {
+      await admin
+        .firestore()
+        .collection("users")
+        .doc(uid)
+        .set(
+          {
+            subscription: {
+              active: false,
+              planType,
+              subscriptionId,
+              haltedAt:
+                admin.firestore.FieldValue
+                  .serverTimestamp(),
+            },
+          },
+          { merge: true }
+        );
+
+      await doc.ref.update({
+        status: "halted",
+        updatedAt:
+          admin.firestore.FieldValue
+            .serverTimestamp(),
+      });
+
+      console.log(
+        "Subscription halted:",
+        subscriptionId
+      );
+    }
+
+    // --------------------------------
+    // CANCELLED
+    // --------------------------------
+
+    else if (
+      event === "subscription.cancelled"
+    ) {
+      await admin
+        .firestore()
+        .collection("users")
+        .doc(uid)
+        .set(
+          {
+            subscription: {
+              active: false,
+              planType,
+              subscriptionId,
+              cancelledAt:
+                admin.firestore.FieldValue
+                  .serverTimestamp(),
+            },
+          },
+          { merge: true }
+        );
+
+      await doc.ref.update({
+        status: "cancelled",
+        updatedAt:
+          admin.firestore.FieldValue
+            .serverTimestamp(),
+      });
+
+      console.log(
+        "Subscription cancelled:",
+        subscriptionId
+      );
+    }
+
+    // --------------------------------
+    // PAUSED
+    // --------------------------------
+
+    else if (
+      event === "subscription.paused"
+    ) {
+      await admin
+        .firestore()
+        .collection("users")
+        .doc(uid)
+        .set(
+          {
+            subscription: {
+              active: false,
+              planType,
+              subscriptionId,
+              pausedAt:
+                admin.firestore.FieldValue
+                  .serverTimestamp(),
+            },
+          },
+          { merge: true }
+        );
+
+      await doc.ref.update({
+        status: "paused",
+        updatedAt:
+          admin.firestore.FieldValue
+            .serverTimestamp(),
+      });
+
+      console.log(
+        "Subscription paused:",
+        subscriptionId
+      );
+    }
+
+    // --------------------------------
+    // RESUMED
+    // --------------------------------
+
+    else if (
+      event === "subscription.resumed"
+    ) {
+      await admin
+        .firestore()
+        .collection("users")
+        .doc(uid)
+        .set(
+          {
+            subscription: {
+              active: true,
+              planType,
+              subscriptionId,
+              resumedAt:
+                admin.firestore.FieldValue
+                  .serverTimestamp(),
+            },
+          },
+          { merge: true }
+        );
+
+      await doc.ref.update({
+        status: "active",
+        updatedAt:
+          admin.firestore.FieldValue
+            .serverTimestamp(),
+      });
+
+      console.log(
+        "Subscription resumed:",
+        subscriptionId
+      );
+    }
+
+    // --------------------------------
+    // COMPLETED
+    // --------------------------------
+
+    else if (
+      event === "subscription.completed"
+    ) {
+      await admin
+        .firestore()
+        .collection("users")
+        .doc(uid)
+        .set(
+          {
+            subscription: {
+              active: false,
+              planType,
+              subscriptionId,
+              completedAt:
+                admin.firestore.FieldValue
+                  .serverTimestamp(),
+            },
+          },
+          { merge: true }
+        );
+
+      await doc.ref.update({
+        status: "completed",
+        updatedAt:
+          admin.firestore.FieldValue
+            .serverTimestamp(),
+      });
+
+      console.log(
+        "Subscription completed:",
+        subscriptionId
+      );
+    }
+
+    else {
+      console.log(
+        "Unhandled Razorpay event:",
+        event
+      );
+    }
+
+    return res.send("OK");
+
+  } catch (error) {
+    console.error(
+      "Razorpay webhook error:",
+      error
+    );
+
+    return res
+      .status(500)
+      .send("Webhook processing failed");
   }
 };
