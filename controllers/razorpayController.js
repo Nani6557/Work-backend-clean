@@ -294,18 +294,7 @@ export const subscriptionWebhook = async (req, res) => {
   );
 }
 
-      await doc.ref.update({
-        status: "active",
-        updatedAt:
-          admin.firestore.FieldValue
-            .serverTimestamp(),
-      });
-
-      console.log(
-        "Subscription activated:",
-        subscriptionId
-      );
-    }
+    
 
     // --------------------------------
     // SUCCESSFUL RENEWAL
