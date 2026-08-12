@@ -2,6 +2,8 @@ import express from "express";
 import {
   createSubscription,
   subscriptionWebhook,
+  verifySubscriptionPayment,
+  subscriptionStatus,
 } from "../controllers/razorpayController.js";
 import { subscriptionStatus } from "../controllers/razorpayController.js";
 
