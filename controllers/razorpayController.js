@@ -69,9 +69,9 @@ if (!plan_id) {
   });
 }
 const cycleMap = {
-  monthly: 12,
-  halfyearly: 2,
-  yearly: 1,
+  monthly: 1200,
+  halfyearly: 200,
+  yearly: 100,
 };
 
 const total_count = cycleMap[planType];
