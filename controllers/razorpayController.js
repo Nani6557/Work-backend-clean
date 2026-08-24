@@ -33,7 +33,15 @@ console.log("plan_id:", plan_id);
 console.log("RAZORPAY_KEY_ID exists:", !!process.env.RAZORPAY_KEY_ID);
 console.log("RAZORPAY_KEY_SECRET exists:", !!process.env.RAZORPAY_KEY_SECRET);
 console.log("====================================");
+console.log(
+  "Razorpay Key:",
+  process.env.RAZORPAY_KEY_ID?.slice(0, 12)
+);
 
+console.log(
+  "Secret length:",
+  process.env.RAZORPAY_KEY_SECRET?.length
+);
     
 if (!plan_id) {
   return res.status(400).json({
