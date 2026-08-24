@@ -196,6 +196,110 @@ export const verifySubscriptionPayment = async (req, res) => {
 
 
 
+const awardReferralCoins = async (newUserUid) => {
+  try {
+    const db = admin.firestore();
+
+    // Find the referral belonging to this newly subscribed user
+    const referralSnap = await db
+      .collection("referralRequests")
+      .where("newUserUid", "==", newUserUid)
+      .where("processed", "==", false)
+      .limit(1)
+      .get();
+
+    if (referralSnap.empty) {
+      console.log(
+        "No unprocessed referral found for subscribed user:",
+        newUserUid
+      );
+      return;
+    }
+
+    const referralDoc = referralSnap.docs[0];
+    const referralData = referralDoc.data();
+
+    const referrerUid = referralData.referrerUid;
+
+    if (!referrerUid) {
+      console.log("Referral has no referrerUid");
+      return;
+    }
+
+    // Use a Firestore transaction so webhook retries
+    // cannot accidentally give coins twice.
+    await db.runTransaction(async (transaction) => {
+      const referralRef = db
+        .collection("referralRequests")
+        .doc(referralDoc.id);
+
+      const referrerRef = db
+        .collection("workers")
+        .doc(referrerUid);
+
+      const latestReferralSnap = await transaction.get(referralRef);
+
+      if (!latestReferralSnap.exists) {
+        throw new Error("Referral request disappeared");
+      }
+
+      const latestReferral = latestReferralSnap.data();
+
+      // Already processed = no second reward
+      if (latestReferral.processed === true) {
+        console.log(
+          "Referral already processed:",
+          referralDoc.id
+        );
+        return;
+      }
+
+      const referrerSnap = await transaction.get(referrerRef);
+
+      if (!referrerSnap.exists) {
+        throw new Error(
+          `Referrer worker not found: ${referrerUid}`
+        );
+      }
+
+      const referrerData = referrerSnap.data();
+
+      const currentCoins =
+        typeof referrerData.coins === "number"
+          ? referrerData.coins
+          : 0;
+
+      const COINS_REWARD = 100;
+
+      transaction.update(referrerRef, {
+        coins: currentCoins + COINS_REWARD,
+        lastCoinRewardAt:
+          admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      transaction.update(referralRef, {
+        processed: true,
+        coinsReward: COINS_REWARD,
+        coinsAwardedTo: referrerUid,
+        coinsAwardedAt:
+          admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(
+        `✅ ${COINS_REWARD} coins awarded to referrer ${referrerUid}`
+      );
+    });
+  } catch (error) {
+    console.error(
+      "❌ Referral coin reward failed:",
+      error
+    );
+
+    throw error;
+  }
+};
+
+
 export const subscriptionWebhook = async (req, res) => {
   try {
     const signature =
@@ -281,7 +385,7 @@ export const subscriptionWebhook = async (req, res) => {
     // ACTIVATED
     // --------------------------------
 
-   if (event === "subscription.activated") {
+ if (event === "subscription.activated") {
 
   const currentEnd = subscription.current_end || null;
 
@@ -309,6 +413,11 @@ export const subscriptionWebhook = async (req, res) => {
     updatedAt:
       admin.firestore.FieldValue.serverTimestamp(),
   });
+
+  // ==========================================
+  // REFERRAL COIN REWARD
+  // ==========================================
+  await awardReferralCoins(uid);
 
   console.log(
     "Subscription activated:",
