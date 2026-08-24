@@ -166,20 +166,22 @@ export const verifySubscriptionPayment = async (req, res) => {
       });
     }
 
-    await admin
-      .firestore()
-      .collection("subscriptions")
-      .doc(uid)
-      .update({
-        status: "verified",
-        paymentId: razorpay_payment_id,
-        updatedAt:
-          admin.firestore.FieldValue.serverTimestamp(),
-      });
+   await admin
+  .firestore()
+  .collection("subscriptions")
+  .doc(uid)
+  .update({
+    status: "verified",
+    paymentId: razorpay_payment_id,
+    updatedAt:
+      admin.firestore.FieldValue.serverTimestamp(),
+  });
 
-    return res.json({
-      success: true,
-    });
+
+
+return res.json({
+  success: true,
+});
 
   } catch (error) {
     console.error(
@@ -264,18 +266,13 @@ const awardReferralCoins = async (newUserUid) => {
 
       const referrerData = referrerSnap.data();
 
-      const currentCoins =
-        typeof referrerData.coins === "number"
-          ? referrerData.coins
-          : 0;
+     const COINS_REWARD = 100;
 
-      const COINS_REWARD = 100;
-
-      transaction.update(referrerRef, {
-        coins: currentCoins + COINS_REWARD,
-        lastCoinRewardAt:
-          admin.firestore.FieldValue.serverTimestamp(),
-      });
+transaction.update(referrerRef, {
+  coins: admin.firestore.FieldValue.increment(COINS_REWARD),
+  lastCoinRewardAt:
+    admin.firestore.FieldValue.serverTimestamp(),
+});
 
       transaction.update(referralRef, {
         processed: true,
