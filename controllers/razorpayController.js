@@ -27,6 +27,14 @@ export const createSubscription = async (req, res) => {
 
 const plan_id = planMap[planType];
 
+console.log("========== RAZORPAY DEBUG ==========");
+console.log("planType:", planType);
+console.log("plan_id:", plan_id);
+console.log("RAZORPAY_KEY_ID exists:", !!process.env.RAZORPAY_KEY_ID);
+console.log("RAZORPAY_KEY_SECRET exists:", !!process.env.RAZORPAY_KEY_SECRET);
+console.log("====================================");
+
+    
 if (!plan_id) {
   return res.status(400).json({
     error: "Invalid planType",
@@ -71,10 +79,18 @@ const subscription = await razorpay.subscriptions.create({
   subscriptionId: subscription.id,
 });
 
-  } catch (error) {
-    console.error("Create subscription error:", error);
-    return res.status(500).json({ error: error.message });
-  }
+ } catch (error) {
+  console.error("========== CREATE SUBSCRIPTION ERROR ==========");
+  console.error("Message:", error.message);
+  console.error("Status:", error.statusCode);
+  console.error("Response:", error.error);
+  console.error("Full error:", error);
+  console.error("===============================================");
+
+  return res.status(500).json({
+    error: error.message || "Subscription creation failed",
+  });
+}
 };
 
 
