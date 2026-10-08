@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { sendOTP as sendTwilioOTP } from "../services/twilio.js";
+import { sendOTP as sendTwilioOTP } from "../services/twilioService.js";
 import { admin, getFirestore } from "../config/firebase.js";
 
 const db = getFirestore();
