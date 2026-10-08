@@ -28,6 +28,51 @@ function generateResetToken() {
 
 
 // ====================================================
+// EXISTING GENERAL OTP
+// POST /otp/send
+// ====================================================
+export async function sendOTP(req, res) {
+  const { phone } = req.body;
+
+  if (!phone) {
+    return res.status(400).json({
+      error: "phone required",
+    });
+  }
+
+  const otp = crypto.randomInt(100000, 1000000).toString();
+
+  try {
+    if (
+      process.env.TWILIO_ACCOUNT_SID &&
+      process.env.TWILIO_AUTH_TOKEN
+    ) {
+      await sendTwilioOTP(
+        phone,
+        `Your verification code is ${otp}`
+      );
+
+      return res.json({
+        success: true,
+      });
+    } else {
+      // Development fallback only
+      return res.json({
+        success: true,
+        otp,
+      });
+    }
+  } catch (e) {
+    console.error("SEND OTP ERROR:", e);
+
+    return res.status(500).json({
+      error: e.message,
+    });
+  }
+}
+
+
+// ====================================================
 // SEND WORKER PASSWORD RESET OTP
 // POST /otp/password-reset/send
 // ====================================================
