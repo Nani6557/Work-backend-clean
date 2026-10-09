@@ -20,7 +20,7 @@ import userRoutes from "./routes/userRoutes.js";
 import agoraRoutes from "./routes/agoraRoutes.js";
 import conversationRoutes from "./routes/conversationRoutes.js";
 import razorpayRoutes from "./routes/razorpayRoutes.js";
-
+import ai2DDrawingsRoutes from "./routes/ai2DDrawingsRoutes.js";
 
 const app = express();
 // 🔥 Razorpay webhook MUST use raw body
@@ -42,7 +42,7 @@ app.use("/user", userRoutes);
 app.use("/conversations", conversationRoutes);
 app.use("/agora", agoraRoutes);
 app.use("/api", razorpayRoutes);        // Razorpay subscription APIs
-
+app.use("/api/ai/2d-drawings", ai2DDrawingsRoutes);
 
 
 app.use("/twilio", twilioRoutes);
